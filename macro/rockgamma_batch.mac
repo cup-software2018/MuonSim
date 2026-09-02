@@ -1,0 +1,53 @@
+# Rock gamma, step one, for the queue. One isotope, one job.
+#
+#   run/run_rockgamma.sh 1 40K
+#   sbatch --array=1-32 run/run_rockgamma.sh '$SLURM_ARRAY_TASK_ID' 232Th
+#
+# Same run as macro/rockgamma.mac, which is where the reasoning for each line is
+# written down. Read that one first; keep the two in step when either changes.
+#
+# The difference is how the isotope arrives. Interactively it is an alias the user
+# sets by hand. Here it comes from the environment, so an array job sets one
+# variable and every task reads it -- no per-job wrapper macro written into the
+# output directory, which is what a few hundred tasks on a shared filesystem
+# would otherwise do.
+#
+# Missing variable stops the macro before /run/beamOn, so a job cannot quietly
+# simulate the wrong isotope. It does NOT make MuonSim exit non-zero, though, so
+# the launcher checks the variable itself rather than relying on this.
+/control/getEnv ROCKGAMMA_ISOTOPE
+
+/process/optical/processActivation Cerenkov false
+/process/optical/processActivation Scintillation false
+
+/run/initialize
+
+# Quiet, and one progress line per 10^5 decays: ten lines in a 10^6 job, enough to
+# tell a slow job from a hung one without filling the log.
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 0
+/run/printProgress 100000
+
+# The Escape tree is the measurement. The Event tree still gets one MCPrimary per
+# decay -- about 47 bytes each, so 0.5 GB at 10^7 -- which is the record of where
+# the decays were.
+/ROOT/savetrackopt 0
+/ROOT/savestepopt 0
+/ROOT/savehitphoton 0
+/ROOT/savescintstep 0
+
+# Both observers, both off by default, both change what the run does:
+# step/rockgamma writes the Escape tree and kills each gamma at the boundary;
+# stack/rockgamma keeps only gammas and the nuclei that emit them, which is 4x to
+# 13x faster and costs nothing above 100 keV.
+/observer/step/enable rockgamma
+/observer/stack/enable rockgamma
+
+/gen/vertex {ROCKGAMMA_ISOTOPE} involume Rock
+
+# In the log, so the file and what made it can be matched up afterwards.
+/control/echo === isotope {ROCKGAMMA_ISOTOPE}
+/observer/list
+
+/run/beamOn {nevent}

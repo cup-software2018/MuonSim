@@ -1,0 +1,74 @@
+---
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 100
+
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLambdasOnASingleLine: Inline
+
+# 상세 설정을 위해 Custom으로 변경합니다.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: true
+  AfterExternBlock: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: true
+  BeforeLambdaBody: false
+  IndentBraces: false
+
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth: 2
+PackConstructorInitializers: Never
+
+AlwaysBreakTemplateDeclarations: true
+
+IndentCaseBlocks: false
+IndentCaseLabels: true
+IndentAccessModifiers: false
+AccessModifierOffset: -2
+
+PointerAlignment: Middle
+ReferenceAlignment: Middle
+
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  # 1. System headers: <...>
+  - Regex: '^<.*>'
+    Priority: 1
+    SortPriority: 1
+    CaseSensitive: false
+
+  # 2. ROOT headers: "TObject.h", "TFile.h", ...
+  - Regex: '^"T[A-Za-z0-9_]*\.h"$'
+    Priority: 2
+    SortPriority: 2
+    CaseSensitive: false
+
+  # 3. Project headers: "DAQConfig/AbsConf.hh", "DAQSystem/AbsADC.hh", ...
+  - Regex: '^"[A-Za-z0-9_]+/.+\.hh"$'
+    Priority: 3
+    SortPriority: 3
+    CaseSensitive: false
+
+  # 4. 기타 나머지 quoted 헤더
+  - Regex: '^".*"'
+    Priority: 4
+    SortPriority: 4
+    CaseSensitive: false
+
+IncludeIsMainRegex: '$^'
+StatementMacros:
+  - ClassImp

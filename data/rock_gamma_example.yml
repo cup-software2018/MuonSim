@@ -1,0 +1,22 @@
+# Gamma spectrum for the rock-gamma source:
+#
+#   /gen/vertex rockgamma data/rock_gamma_example.yml [radius unit]
+#
+# energy / flux tabulate the relative intensity of gammas arriving from the
+# surrounding rock. flux need not be normalised and is interpolated
+# piecewise-linearly, so the grid may be uneven.
+#
+# Injection: a point uniform over the world hemisphere (dome + base disk) with a
+# cos(theta)-weighted inward direction, which is what an isotropic external field
+# produces at a surface. energy_min / energy_max are ignored here -- a surface
+# flux has no threshold -- so the tabulated range is the sampling range.
+#
+# NOTE: the values below are a FLAT placeholder covering the range that matters
+# for U/Th/K rock activity. They are NOT a measured spectrum -- replace them with
+# your own, e.g. the 238U / 232Th chain lines and 40K at 1.461 MeV with their
+# measured relative intensities.
+
+energy_unit: MeV
+
+energy: [0.1, 3.0]
+flux:   [1.0, 1.0]

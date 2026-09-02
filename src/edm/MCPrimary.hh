@@ -1,0 +1,88 @@
+#pragma once
+
+
+#include "TObject.h"
+
+// The particle is identified by its PDG code alone. The name used to sit beside it,
+// which is the same information twice: the code encodes every species uniquely, ions
+// included. ROOT's TDatabasePDG turns one into the other in analysis.
+class MCPrimary : public TObject {
+public:
+  MCPrimary();
+  MCPrimary(const MCPrimary & prim);
+  virtual ~MCPrimary();
+
+  void Clear(Option_t * opt = "") override;
+
+  void SetPDGCode(int val);
+  void SetVertex(double x, double y, double z);
+  void SetMomentum(double x, double y, double z);
+  void SetKineticEnergy(double val);
+  void SetT0(double val);
+  void SetTrackId(int val);
+
+  int GetPDGCode() const;
+  void GetVertex(double & x, double & y, double & z) const;
+  void GetMomentum(double & x, double & y, double & z) const;
+  double GetKineticEnergy() const;
+  double GetT0() const;
+  int GetTrackId() const;
+
+  void Print(Option_t * opt = "") const override;
+
+private:
+  int fPDGCode = 0;
+  int fTrackId = 0;
+  double fVx = 0, fVy = 0, fVz = 0;
+  double fPx = 0, fPy = 0, fPz = 0;
+  double fKineticEnergy = 0;
+  double fT0 = 0;
+
+  ClassDefOverride(MCPrimary, 3)
+};
+
+
+inline void MCPrimary::SetPDGCode(int val) { fPDGCode = val; }
+
+inline void MCPrimary::SetVertex(double x, double y, double z)
+{
+  fVx = x;
+  fVy = y;
+  fVz = z;
+}
+
+inline void MCPrimary::SetMomentum(double x, double y, double z)
+{
+  fPx = x;
+  fPy = y;
+  fPz = z;
+}
+
+inline void MCPrimary::SetKineticEnergy(double val) { fKineticEnergy = val; }
+
+inline void MCPrimary::SetT0(double val) { fT0 = val; }
+
+inline void MCPrimary::SetTrackId(int val) { fTrackId = val; }
+
+
+inline int MCPrimary::GetPDGCode() const { return fPDGCode; }
+
+inline void MCPrimary::GetVertex(double & x, double & y, double & z) const
+{
+  x = fVx;
+  y = fVy;
+  z = fVz;
+}
+
+inline void MCPrimary::GetMomentum(double & x, double & y, double & z) const
+{
+  x = fPx;
+  y = fPy;
+  z = fPz;
+}
+
+inline double MCPrimary::GetKineticEnergy() const { return fKineticEnergy; }
+
+inline double MCPrimary::GetT0() const { return fT0; }
+
+inline int MCPrimary::GetTrackId() const { return fTrackId; }

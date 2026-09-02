@@ -1,0 +1,23 @@
+# Antineutrino spectrum for the IBD source:
+#
+#   /gen/vertex <position...> IBD data/ibd_spectrum_example.yml
+#
+# energy / flux tabulate the relative antineutrino intensity. flux need not be
+# normalised, and it is interpolated piecewise-linearly between points, so the
+# grid may be uneven and as coarse or fine as the data warrants.
+#
+# energy_min / energy_max set the sampling window. Both are optional -- without
+# them the tabulated range is used. energy_min is clamped up to the IBD
+# threshold (1.806 MeV), below which the cross section is zero.
+#
+# NOTE: the two points below are a FLAT placeholder, so the cross section alone
+# shapes the sampled spectrum. That is fine for exercising the kinematics but is
+# NOT a physical source spectrum -- replace energy/flux with the real reactor,
+# geoneutrino, ... spectrum you want to simulate.
+
+energy_unit: MeV
+energy_min: 1.806
+energy_max: 10.0
+
+energy: [1.806, 10.0]
+flux:   [1.0, 1.0]

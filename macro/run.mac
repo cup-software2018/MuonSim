@@ -1,0 +1,286 @@
+# Batch run macro for cosmic muon simulation
+# Usage: MuonSim [-o out.root] [-s seed] [-m materials.yml] run.mac
+#        MuonSim --help   for the full option list
+
+/run/initialize
+
+/run/verbose 1
+/event/verbose 0
+/tracking/verbose 0
+
+# ---------------------------------------------------------------------------
+# RootManager options
+# ---------------------------------------------------------------------------
+#
+# /ROOT/savetrackopt <int>  — bit flags (OR together) for which tracks to save
+#
+#   0   kSaveNone     save nothing (default)
+#   1   kSaveHeavy    muons, hadrons, ions   (and nothing else)
+#   2   kSaveElec     e± NOT from EM-shower processes — decay electrons land here
+#   4   kSaveGamma    gammas
+#   8   kSaveEMShower e± from compt/phot/conv/annihil/Ioni/Brem
+#  16   kSaveOptical  optical photons
+#
+#   The bits run in order of how often they are wanted, so the useful sets are the
+#   low numbers: heavy, then decay electrons, then gammas, and only after those the
+#   two that dominate the file size.
+#
+#   Examples:
+#     /ROOT/savetrackopt 1    → muons/hadrons/ions only
+#     /ROOT/savetrackopt 5    → those + gammas             (1+4)
+#     /ROOT/savetrackopt 7    → those + gammas + decay e±  (1+2+4)
+#     /ROOT/savetrackopt 15   → those + gammas + all e±    (1+2+4+8)
+#     /ROOT/savetrackopt 31   → everything                 (1+2+4+8+16)
+#
+#   Gammas have a bit of their own because they are the background channel
+#   underground work turns on: dark-matter and double-beta searches live or die by
+#   them. They are also most of the output — 300 cosmic events at fixed seed 12345
+#   give 2.39 MB at 1 and 9.57 MB at 5, so gammas are 75% of the file and 95% of
+#   the tracks. Ask for them deliberately.
+#
+/ROOT/savetrackopt 1
+
+# /ROOT/savestepopt <int>  — bit flags for which track types get step-level info saved
+#
+#   Same bit positions as savetrackopt.
+#   NOTE: steps are stored inside the MCTrack object, so a step is saved only
+#   when BOTH conditions hold:
+#     (a) the track type bit is set in savetrackopt  (MCTrack exists)
+#     (b) the track type bit is set in savestepopt
+#   Effective step set = savetrackopt & savestepopt.
+#
+#   0   kStepNone     save no steps (default)
+#   1   kStepHeavy    muons, hadrons, ions
+#   2   kStepElec     e± NOT from EM-shower processes
+#   4   kStepGamma    gammas
+#   8   kStepEMShower e± from compt/phot/conv/annihil/Ioni/Brem
+#  16   kStepOptical  optical photons  (WARNING: enormous output)
+#
+#   Examples:
+#     /ROOT/savestepopt 1    → muon/hadron steps only  ← typical choice
+#     /ROOT/savestepopt 5    → those + gamma steps       (needs savetrackopt bit 4)
+#     /ROOT/savestepopt 7    → those + gamma + decay e±  (needs savetrackopt 7)
+#
+#   Each step carries the process that ENDED it (fProcessName) and, in a PSMD
+#   slab, the slab it deposited in (fDetectorID). The process is what lets an
+#   interaction be told from a boundary crossing: in a cosmic run only 1.9% of
+#   saved steps are Transportation, the rest being compt/muIoni/Cerenkov/phot and
+#   the rare nCapture, photonNuclear and muMinusCaptureAtRest.
+#
+/ROOT/savestepopt 1
+
+# /ROOT/savehitphoton <int>  — per-PMT optical photon hit detail
+#   0   off — save only PMT hit count per event (default)
+#   1   on  — save individual photon hit info (time, position, ...) per PMT
+#
+/ROOT/savehitphoton 1
+
+# ---------------------------------------------------------------------------
+# Optical properties of materials and surfaces
+# ---------------------------------------------------------------------------
+#
+# Refractive indices, absorption and Rayleigh lengths, reflector reflectivity and
+# photocathode efficiency all come from a YAML file, not from the code: they are
+# the systematics of an optical detector, so varying one has to be possible without
+# a rebuild.
+#
+# They are NOT set from this macro. What the detector IS -- its dimensions and its
+# material properties -- is named on the command line, while a macro says what the
+# run DOES. The reason is not tidiness: both have to be in place before
+# /run/initialize builds the geometry, and a macro command that only works above a
+# certain line is a trap. /material/load used to exist and was silently ignored
+# when it came after /run/initialize.
+#
+#   MuonSim -m my_materials.yml run.mac
+#
+# With nothing given, data/optical/wcmd_materials.yml is used -- found next to the
+# executable, or through $MUONSIM_DATA. A file need only carry what it changes;
+# several may be given with repeated -m, each adding to the ones before. Schema and validation rules: src/phys/MaterialPropertyFile.hh
+#
+# The line the run prints names the file and a content digest, so an output can be
+# traced back to the numbers that produced it.
+#
+# ---------------------------------------------------------------------------
+# Primary generator — /gen/vertex
+# ---------------------------------------------------------------------------
+#
+# At least one /gen/vertex is REQUIRED -- there is no default generator, and
+# /run/beamOn without one is a fatal error (GEN001). This macro asks for cosmic
+# muons, which read the flux histogram h_dJdEdTdP from the named ROOT file; the
+# alternatives below are commented out. Adding a second /gen/vertex does not
+# replace the first, it fires alongside it.
+#
+# Each /gen/vertex adds one vertex and ALL of them fire in EVERY event. A vertex
+# re-samples its position, energy and direction each event.
+#
+#   /gen/vertex <type> [<energy>] [clause] ...
+#
+# --- type ------------------------------------------------------------------
+#
+#   a Geant4 particle    e-, e+, mu-, gamma, alpha, neutron, proton, ...
+#
+#   an isotope           60Co, 232Th, 238U, 252Cf   (Co60 spelling also works)
+#                        Leave the energy off so it starts at rest and decays;
+#                        the daughter chain is followed. Restrict it with
+#                          /process/had/rdm/nucleusLimits <aMin> <aMax> <zMin> <zMax>
+#
+#   a source             brings its own particles and energies, so it takes no
+#                        energy spec:
+#     cosmic             muons from a flux histogram. Derives its own position,
+#                        so it takes no position clause.
+#                        REQUIRES input <flux.root> holding the TH3D h_dJdEdTdP
+#     rockgamma          gammas from the surrounding rock, entering through the
+#                        cavern boundary.  REQUIRES input <spectrum.yml>
+#     IBD                inverse beta decay -> correlated e+ and neutron.
+#                        REQUIRES input <spectrum.yml>
+#     AmBe               neutron + the 4.44 MeV 12C gamma (in 58% of emissions).
+#                        Uses a built-in measured spectrum; an OPTIONAL
+#                        input <spectrum.yml> replaces it
+#     252CfSF            one spontaneous fission: ~3.8 neutrons, ~7 prompt
+#                        gammas, every event. Takes no input file -- it has
+#                        three built-in distributions, which one file cannot hold
+#
+#   Spectra are YAML tables (schema in src/gen/SpectrumFile.hh) for every source
+#   except cosmic: its flux is a 3D joint (energy, theta, phi) distribution, not a
+#   table, so it stays a ROOT histogram.
+#
+#   AmBe is the only source with a built-in spectrum, because Am-Be has one
+#   accepted model. IBD and rockgamma have no single standard spectrum -- reactor
+#   vs geoneutrino, one rock composition vs another -- so they demand the file
+#   rather than quietly inventing one.
+#
+#   NOTE 252Cf as a particle name is the Cf252 *ion*, decayed by Geant4: only ~3%
+#   of decays fission. Use 252CfSF to get a fission every event.
+#
+# --- energy ----------------------------------------------------------------
+#
+#   Comes directly after the type. Omit it for 0, i.e. at rest. Unit defaults to
+#   MeV (Geant4's native energy unit):
+#
+#     <value> [unit]                       fixed
+#     uniform  <min> <max> [unit]          flat between the bounds
+#     gauss    <mean> <sigma> [unit]       Gaussian, truncated at zero
+#     exp      <E0> [unit]                 dN/dE ~ exp(-E/E0)
+#     powerlaw <index> <min> <max> [unit]  dN/dE ~ E^index
+#     spectrum <E>:<w> <E>:<w> ... [unit]  discrete lines, relative weights
+#
+# --- clauses (any order) ---------------------------------------------------
+#
+#   position — one of these is required (except for cosmic):
+#     point <x> <y> <z> [unit]        fixed point; length unit defaults to mm
+#     involume <volume>               uniform inside that physical volume
+#     onvolume [in|out|both] <volume> uniform over its surface. in/out restricts
+#                                     the emission to that side of the surface
+#                                     normal; both (the default) is 4 pi
+#     multivolume <pattern>           every volume whose name contains <pattern>,
+#                                     picked in proportion to cubic volume
+#
+#   direction:
+#     random                          isotropic (the default)
+#     direction <dx> <dy> <dz>        fixed
+#     cos | iso                       how a restricted surface spreads its
+#                                     emission. iso is uniform in solid angle,
+#                                     right for activity decaying on a surface.
+#                                     cos follows Lambert, right for a flux
+#                                     crossing it, and is rockgamma's default.
+#
+#   other:
+#     polarization <px> <py> <pz>
+#     time <t> [unit]                 vertex time, default ns
+#     input <file>                    data file for the sources above:
+#                                     .yml/.yaml table, or .root histogram
+#
+#   The world is a SPHERE of radius 16 m centred on the origin, mostly rock. The
+#   air cavern is the upper half of a 15 m sphere standing on the cavern floor at
+#   z = 0, which is the datum every structure is measured from. Useful coordinates
+#   are a few metres up, not around the origin:
+#
+#     hall floor        0          shielding top   3865
+#     pit bottom       -5000       frame top       4550  = tank floor
+#     water         4584..7450     tank top        7692
+#     hall apex     15000          rock shell       1000
+#                                  world radius    16500
+#
+#   A vertex outside the world aborts the run reporting the offending coordinates
+#   instead of crashing inside the navigator.
+#
+#   Physical volume names in this geometry:
+#     hall:  World  Rock  Hall      (Hall is the air the detectors stand in -- the
+#                                    dome AND the pit, one volume at the origin, so
+#                                    hall coordinates ARE world coordinates)
+#     WCMD:  TankSteel  DoorSteel  TankAir  TankWater  DoorWater
+#            RoomSteel  RoomAir  PMTPhys0 .. PMTPhys47
+#     PSMD:  PSMDModule0 .. PSMDModule129   one module each
+#            PSMDAlShell  PSMDScintTop  PSMDScintBottom
+#     frame: HBeam0 .. HBeam15   columns and top girders, exact H sections
+#     shield: ShieldHDPE  ShieldBoratedRubber  ShieldLead  ShieldLeadInner
+#            ShieldCavity   (the air the shielding encloses, open at the top)
+#   (use "multivolume PMTPhys" for all 48 PMTs, "multivolume PSMDModule" for all
+#    130 modules)
+#
+#   NOTE the PSMD module is ONE logical volume placed 130 times, so the three
+#   names inside it are shared by all of them: "involume PSMDScintTop" resolves to
+#   whichever module the volume search reaches first, not to all 130. To aim at a
+#   particular module use its own name, e.g. "involume PSMDModule65".
+#
+#   Which PSMD slab a step deposited energy in is recorded as MCStep::fDetectorID:
+#     detectorID = 2 * module + slab,   slab 0 = top, 1 = bottom,  -1 = not in a slab
+#   so module = detectorID / 2. The id names a slab; readout channels (two per
+#   slab, four per module) are a level below and are not simulated yet.
+#
+# --- examples --------------------------------------------------------------
+#
+#   2.5 MeV electron straight up from a fixed point
+#     /gen/vertex e- 2.5 MeV point 0 0 5000 mm direction 0 0 1
+#
+#   flat 0-3 MeV electron anywhere in the water, isotropic
+#     /gen/vertex e- uniform 0 3 MeV involume TankWater random
+#
+#   60Co decaying in the water: bulk contamination
+#     /gen/vertex 60Co involume TankWater
+#
+#   40K gamma from the 48 PMTs, weighted by their volume
+#     /gen/vertex gamma 1.46 MeV multivolume PMTPhys
+#
+#   2.615 MeV line smeared by 50 keV
+#     /gen/vertex gamma gauss 2.615 0.05 MeV involume TankWater
+#
+#   alpha lines with relative intensities
+#     /gen/vertex alpha spectrum 5.407:1 5.685:0.2 MeV involume TankWater
+#
+#   surface contamination on the steel, emitted into the tank only
+#     /gen/vertex neutron 1 MeV onvolume in TankSteel
+#
+#   cosmic-like muon spectrum, straight down (note the explicit GeV)
+#     /gen/vertex mu- powerlaw -2.7 1 100 GeV point 0 0 9000 mm direction 0 0 -1
+#
+#   calibration sources
+#     /gen/vertex AmBe point 0 0 5000 mm
+#     /gen/vertex AmBe involume TankWater input data/ambe_spectrum_example.yml
+#     /gen/vertex 252CfSF involume TankWater
+#     /gen/vertex IBD involume TankWater input data/ibd_spectrum_example.yml
+#
+#   gammas from the rock, entering through the hall wall. Use Hall, not
+#   World: the world's own skin is now the OUTSIDE of the rock, so starting there
+#   buries the gammas under a metre of it
+#     /gen/vertex rockgamma onvolume in Hall input data/rock_gamma_example.yml
+#
+#   the cosmic muon generator, stated explicitly
+#     /gen/vertex cosmic input data/muon_flux.root
+#
+#   two vertices, both firing every event
+#     /gen/vertex e- 1 MeV point -1000 0 5000 mm
+#     /gen/vertex gamma 1 MeV point 1000 0 5000 mm
+#
+# --- the other /gen commands ----------------------------------------------
+#
+#   /gen/list     print the vertices defined so far
+#   /gen/clear    remove them all; one must be defined again before /run/beamOn
+#
+#   /control/manual /gen/vertex    full syntax reference at run time
+#
+# ---------------------------------------------------------------------------
+
+/gen/vertex cosmic input data/muon_flux.root
+
+/run/beamOn {nevent}

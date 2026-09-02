@@ -1,0 +1,16 @@
+CompileFlags:
+  CompilationDatabase: build
+  Add:
+    - -I/home/cupsoft/Products/GEANT4/V11.1.3/include/Geant4
+    - -I/scratch/cupsoft/Works/AMoRE/Muons/MuonSim/src/geo
+    - -I/scratch/cupsoft/Works/AMoRE/Muons/MuonSim/src/phys
+    - -I/scratch/cupsoft/Works/AMoRE/Muons/MuonSim/src/action
+    - -I/scratch/cupsoft/Works/AMoRE/Muons/MuonSim/src/data
+    - -I/scratch/cupsoft/Works/AMoRE/Muons/MuonSim/src/pmt
+    - -I/scratch/cupsoft/Works/AMoRE/Muons/MuonSim/src/gen
+    - -I/scratch/cupsoft/Works/AMoRE/Muons/MuonSim/build
+    - -I/home/cupsoft/Products/ROOT/V6.32.20_3.11.14/include
+    - -std=c++17
+Diagnostics:
+  Suppress:
+    - incomplete_member_access

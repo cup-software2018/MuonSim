@@ -1,0 +1,23 @@
+# FORMAT TEMPLATE — not a measured spectrum.
+#
+# AmBe already carries the real 214-point measured neutron spectrum built in, so
+# you only need a file like this to override it with your own measurement:
+#
+#   /gen/vertex AmBe involume TankWater input data/ambe_spectrum_example.yml
+#
+# The three points below are deliberately crude placeholders that produce a
+# triangular 3-4 MeV bump — nothing like a real Am-Be source. Replace energy and
+# flux with your own table; it is interpolated piecewise-linearly, so the grid may
+# be uneven and as fine as your data warrants, and flux need not be normalised.
+#
+# The file replaces the built-in table WHOLE, including the leading (0, 0) anchor
+# that tapers it to zero below its 0.25 MeV measurement threshold. Add your own
+# leading (0, 0) point if you want that same extrapolation.
+#
+# Same schema for every spectrum here (see src/gen/SpectrumFile.hh); cosmic is the
+# one exception, taking a ROOT TH3D instead.
+
+energy_unit: MeV
+
+energy: [3.0, 3.5, 4.0]
+flux:   [0.0, 1.0, 0.0]

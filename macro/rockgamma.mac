@@ -1,0 +1,96 @@
+# Step one of the rock gamma calculation: what escapes the rock.
+#
+#   run/run_rockgamma.sh 1 40K
+#
+# The isotope arrives as the alias {isotope}, the way -n arrives as {nevent}, so
+# one macro serves all of them and the name cannot disagree with the output file.
+# Running this by hand therefore needs the alias set first:
+#
+#   /control/alias isotope 40K
+#   /control/execute macro/rockgamma.mac
+#
+# U/Th/K decay inside the rock shell; every gamma that reaches the hall is written
+# to an Escape tree and KILLED there. Step two then re-injects that flux on the
+# hall surface, which is what a production run uses:
+#
+#   /gen/vertex rockgamma onvolume in Hall input data/rock_gamma.yml
+#
+# One isotope per run -- given as the first argument. Their activities differ and are
+# measured separately, so they are weighted afterwards rather than mixed here.
+
+# No Cherenkov or scintillation light: nothing here is an optical measurement, and
+# the photons are most of the cost. Both must come before /run/initialize.
+/process/optical/processActivation Cerenkov false
+/process/optical/processActivation Scintillation false
+
+/run/initialize
+
+/run/verbose 0
+/event/verbose 0
+/tracking/verbose 0
+/run/printProgress 1000
+
+# ---------------------------------------------------------------------------
+# What to record
+# ---------------------------------------------------------------------------
+#
+# No tracks and no steps: the Escape tree is the measurement. The Event tree still
+# gets one MCPrimary per decay, which is the record of WHERE the decays were and
+# what verifies the sampling -- about 47 bytes an event, so 0.5 GB at 1e7 decays.
+/ROOT/savetrackopt 0
+/ROOT/savestepopt 0
+/ROOT/savehitphoton 0
+/ROOT/savescintstep 0
+
+# The observers. Both off unless asked for, and both change what the run does.
+#
+# step/rockgamma writes the Escape tree and kills each gamma as it crosses into the
+# hall. An ordinary run with this on would lose the very background it is meant to
+# be feeding.
+/observer/step/enable rockgamma
+
+# stack/rockgamma keeps the gammas, and the nuclei that emit them, and throws away
+# every other secondary before it is tracked -- 65% of the tracks in a 40K run are
+# electrons and neutrinos that only cost time. 40K: 70 s -> 5.5 s. 232Th: 177 s -> 45 s.
+#
+# The price, measured against the same seed: escaping gammas below 100 keV drop (40K
+# loses 90% of its <50 keV, being mostly beta bremsstrahlung; 232Th loses nothing
+# measurable). From 100 keV to 3 MeV every band agrees with 1 within 2 sigma in both,
+# and the 1461 keV line is 1.05 +- 0.15. 100 keV cannot cross 250 mm of lead, so
+# nothing this study looks at is affected. Comment it out if the soft end is the point,
+# or if neutron capture gammas are -- neutrons are killed as well.
+/observer/stack/enable rockgamma
+
+/observer/list
+
+# ---------------------------------------------------------------------------
+# The source
+# ---------------------------------------------------------------------------
+#
+# Rock is the shell wrapping the hall, kRockThickness deep on every face. At 1 m
+# that is 10 to 20 gamma attenuation lengths, so nothing that could escape is left
+# out and nothing deeper is sampled for no reason: "involume Rock" wastes nothing.
+#
+# 40K is a single decay with a 1.461 MeV gamma in 10.7% of them -- the clean case
+# to start from.
+/gen/vertex 238U involume Rock
+
+# 238U and 232Th are CHAINS, and a chain needs thought before the number means
+# anything:
+#
+#   - Bq/kg is normally quoted for the parent assuming secular equilibrium, i.e.
+#     every daughter decaying at the parent's rate. Starting 238U and following the
+#     whole chain does NOT give that in one run, because the daughters carry their
+#     real half-lives -- 226Ra alone is 1600 years.
+#   - The usual way is to run the chain in segments and add them with equal
+#     activity, restricting each with
+#       /process/had/rdm/nucleusLimits <aMin> <aMax> <zMin> <zMax>
+#     Most of the gamma yield is in the lower part of each chain: 214Pb and 214Bi
+#     for 238U, 212Pb, 212Bi and 208Tl for 232Th.
+#
+#   run/run_rockgamma.sh 1 238U
+#   run/run_rockgamma.sh 1 232Th
+
+
+
+/run/beamOn 1000000

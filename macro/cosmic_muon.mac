@@ -1,0 +1,71 @@
+# Cosmic muon run.
+#
+#   MuonSim -n 10000 -o cosmic.mac.root macro/cosmic_muon.mac
+#   MuonSim -n 100 -s 12345 macro/cosmic_muon.mac      reproducible
+#
+# A focused macro: the full annotated reference is macro/run.mac, and the
+# generator is documented in doc/generator.md.
+
+/run/initialize
+
+/run/verbose 1
+/event/verbose 0
+/tracking/verbose 0
+
+# ---------------------------------------------------------------------------
+# What to save
+# ---------------------------------------------------------------------------
+#
+# Muons, hadrons and ions, with their steps. Bits: 1 heavy, 2 non-shower e±,
+# 4 gamma, 8 shower e±, 16 optical. A step needs its bit in BOTH masks.
+#
+# Gammas (bit 4) are left off deliberately -- they are 75% of the file and 95%
+# of the tracks. Turn them on when the study is about them, not by default.
+
+/ROOT/savetrackopt 1
+/ROOT/savestepopt 1
+/ROOT/savehitphoton 1
+
+# ---------------------------------------------------------------------------
+# The generator
+# ---------------------------------------------------------------------------
+#
+# Muons are launched on a virtual hemisphere, dome upwards, of radius R centred on
+# the point given. R is the whole acceptance, and the cost goes as R^2, so it wants
+# to enclose every detector volume and nothing more.
+#
+# Where the FLAT SIDE goes is a correctness question, not a tuning one. Launch
+# points lie on the dome, so a muon is generated only if it enters the sphere
+# through the upper half. For a steeply falling track that is automatic, but a
+# near-horizontal one passing BELOW the centre enters through the lower half -- and
+# is never generated. So anything sitting under the flat side has an acceptance hole
+# for inclined muons.
+#
+# Hence the flat side sits at z = -460, the underside of the PSMD modules lying in
+# the pit, which is the lowest detector surface in the apparatus:
+#
+#   0     - 400 - 60  =  -460
+#   floor   gap    module thickness
+#
+# With every detector at or above that plane, any muon reaching any of them from
+# above must cross the dome, whatever its inclination.
+#
+# R is then set by the farthest detector point, the top corner of the water tank:
+#
+#   tank top corner   (3205, 3205, 7692)  ->  9327   <-- binding
+#   tank floor corner (3205, 3205, 4550)  ->  6756
+#   PSMD wall, top    (1770, 1770, 3720)  ->  4872
+#   PSMD floor module (1740, 1740, -460)  ->  2461
+#
+# R = 9500 mm clears it by 173 mm. The empty pit below -460 holds no detector and
+# needs no covering.
+#
+# THE TANK HEIGHT SETS R. geo::frame::kTopZ is where the tank stands, so changing it
+# moves the binding point and this radius has to be recomputed. A sphere left too
+# small silently drops muons that should have been generated -- nothing warns.
+
+/gen/vertex cosmic input /home/cupsoft/Works/AMoRE/Muons/MuonSim/data/muon_flux.root hemisphere 0 0 -460 9500 mm
+
+# /gen/list
+
+/run/beamOn {nevent}

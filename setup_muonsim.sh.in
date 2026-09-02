@@ -1,0 +1,13 @@
+#!/bin/bash
+# Source this script to set up the MuonSim environment:
+#   source setup_muonsim.sh
+
+MUONSIM_PREFIX="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ${VAR:-} rather than ${VAR}: LD_LIBRARY_PATH is often unset, and a caller with
+# `set -u` -- any careful batch script -- aborts on the bare form.
+export PATH="${MUONSIM_PREFIX}/@CMAKE_INSTALL_BINDIR@:${PATH:-}"
+export LD_LIBRARY_PATH="${MUONSIM_PREFIX}/@CMAKE_INSTALL_LIBDIR@:${LD_LIBRARY_PATH:-}"
+
+# Data files (spectra, optical properties, muon flux) ship alongside the binaries.
+export MUONSIM_DATA="${MUONSIM_PREFIX}/data"
