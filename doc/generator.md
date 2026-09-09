@@ -65,7 +65,7 @@ A source brings its own particles and energies, so it takes **no energy spec**.
 
 | Source | What | Input file |
 |---|---|---|
-| `cosmic` | muons from a flux histogram; derives its own position, so it takes no position clause | **required** — `.root` holding the `TH3D` `h_dJdEdTdP` |
+| `cosmic` | muons from a flux histogram; derives its own position, so it takes no position clause | **required** — the SPHERE `.root`, holding the `TH3D` `h_flux` |
 | `rockgamma` | gammas from the surrounding rock, entering through the cavern boundary | **required** — `.yml` |
 | `IBD` | inverse beta decay → correlated e+ and neutron | **required** — `.yml` |
 | `AmBe` | neutron + the 4.44 MeV ¹²C gamma (in 58% of emissions) | *optional* — `.yml` replaces the built-in measured spectrum |
@@ -189,60 +189,112 @@ Any order.
 | `polarization <px> <py> <pz>` | |
 | `time <t> [unit]` | vertex time, default ns |
 | `input <file>` | data file for the sources above: `.yml`/`.yaml` table, or `.root` histogram |
-| `hemisphere <x> <y> <z> <R> [unit]` | the virtual surface `cosmic` starts on — see below |
+| `sphere <x> <y> <z> <R> [unit]` | the virtual surface `cosmic` is launched from — see below |
+| `rotate` | `file` only: turn each event to a random orientation as it is used |
 
 A vertex outside the world aborts the run reporting the offending coordinates,
 rather than crashing inside the navigator.
 
 ## Cosmic muons
 
-Muons are launched from a **virtual hemisphere**, dome upwards, of radius `R`
-centred on a point you choose:
+Muons are launched from a **virtual sphere** of radius `R` centred on a point you
+choose, sampling the flux histogram `h_flux` for (kinetic energy, θ, φ):
 
 ```
-/gen/vertex cosmic input data/muon_flux.root hemisphere 0 0 -460 9500 mm
+/gen/vertex cosmic input amore_muon_flux_sphere.root sphere 0 0 0 16400 mm
 ```
 
-Left unset, the surface falls back to the world's own extent. That keeps a run
-working with no configuration, but it ties the acceptance to the geometry, so state
-it when the number matters.
+Left unset, the sphere falls back to the world's own extent. That keeps a run
+working with no configuration, but it ties the rate to the geometry, so state it
+when the number matters.
 
-**Where the flat side goes is a correctness question, not a tuning one.** Launch
-points lie on the dome, so a muon is generated only if it enters the sphere through
-the upper half. That is automatic for a steeply falling track, but a near-horizontal
-one passing *below* the centre enters through the lower half and is never generated.
-So anything sitting under the flat side has an acceptance hole for inclined muons —
-put the plane at or below the lowest detector surface.
+### Why a sphere
 
-In this geometry that is `z = -460`, the underside of the PSMD modules lying in the
-pit, and `R = 9500` is then set by the farthest detector point, the top corner of
-the water tank at 9327 mm. `macro/cosmic_muon.mac` carries the derivation.
+The rate arriving from a direction Ω is `I(Ω) · A⊥(Ω)`, where `A⊥` is the launch
+surface's **projected area**. Everything follows from `A⊥`:
 
-How it works, and why the radius is the only knob:
+* **A sphere**: `A⊥ = πR²`, the same from every direction — a ball's shadow is the
+  same circle whatever the angle. **So no cos θ enters.**
+* **A horizontal disc**: `A⊥ = A cos θ`. Rain on a flat roof: falling straight down
+  it arrives over the full area; at 60° the roof is edge-on and only half arrives.
 
-- The flux histogram is sampled for (energy, θ, φ).
-- Muons come from above, so a downward-going track that crosses the sphere and
-  passes *above* its centre enters through the upper half — the dome. For those the
-  dome is the entry surface and every crossing track is generated. (This is the claim
-  `CosmicMuonGen.hh` makes without the qualifier, which is why the plane has to sit
-  under the detectors: see above.)
-- The start point is drawn from a disk of radius `R` perpendicular to the sampled
-  direction, then pushed back onto the sphere. Drawing uniformly over that disk is
-  the same as drawing uniformly over the hemisphere's projected area, so the cos θ
-  weighting comes out automatically — no extra factor is applied, and none should
-  be.
+That is not a modelling choice, it is the geometry of the surface. It also decides
+which flux file is correct, and **getting it wrong is silent**: the sphere and plane
+files differ by 32% in their integrals (93.57 against 70.79 /m²/day) and nothing in
+either file says which it is. This generator launches from a sphere and therefore
+needs the **sphere** file. It prints the integral it read — check that.
 
-So `R` has to enclose whatever the run cares about and nothing larger: the cost
-goes as `R²`.
+### Why not a disc: it leaks
 
-A sphere left too small drops muons that should have been generated, and **nothing
-warns** — no overlap check sees it. So `R` has to be re-derived whenever the
-apparatus moves. Raising `geo::frame::kTopZ` raises the water tank with it, which is
-the binding point, so that constant and this radius are tied together.
+A muon drifts sideways as it descends, so it can hit the apparatus and then cross a
+disc plane *outside* the disc, never being generated at all. Measured for the water
+tank:
 
-> The footpoint displaces from the **detector**, not from the vertical axis. A
-> steeply inclined direction still finds a valid start point on the dome; it does
-> not lose coverage.
+| disc radius | tank-hitting muons never generated |
+|---|---|
+| 9500 mm | 12.9% |
+| 15000 mm | 2.0% |
+| 20000 mm | 0.41% |
+
+They are lost preferentially at large zenith angle, so the inclination distribution
+is skewed as well as the rate. A closed surface that **encloses** the apparatus
+cannot leak — anything reaching inside came in through it. That is a property of the
+shape, not of the radius.
+
+### Choosing R
+
+`R` only has to enclose whatever is being asked about, and **the answer does not
+depend on it**: a bigger sphere makes more muons and wastes more of them, in
+proportion. The cost goes as `R²`.
+
+| R | what it includes | seconds per generated muon |
+|---|---|---|
+| 16400 mm | the whole rock shell, so muon-induced neutrons made anywhere in the rock | 1.09 |
+| 5945 mm | the water tank alone, centred at z = 3846 | 8.32 |
+
+The tight sphere is eight times cheaper per tank crossing but loses neutrons made in
+the far floor and walls, which for a muon-induced background study is a real
+component.
+
+That the two agree *per tank crossing* is the test worth running after any change to
+the sampling — 19.90 s against 19.80 s measured. A disc fails it, because its leak
+fraction changes with radius.
+
+### Live time comes out by itself
+
+The flux integral fixes how many muons a second cross the sphere, so the source sets
+the clock and the run reports a live time:
+
+```
+CosmicMuonGen: h_flux from ..., integral 1.08299e-07 /cm2/s = 93.5704 /m2/day
+/gen/vertex: cosmic sets the clock itself, 0.915087 Hz -- 1.09279 s per generated primary
+### source: 2000 decays over 2179.53 s live time
+```
+
+A rate is then counts divided by that. **No effective area and no angular acceptance
+has to be worked out**, because the generated ensemble is complete: any subset of it
+is also "what happened in that time". `/gen/activity` is not used here — and if set
+afterwards it overrides, which would put a number in that disagrees with the
+histogram.
+
+### Facts about the histogram
+
+* **Bin content is a flux, not a density**, in cm⁻²s⁻¹. That is why sampling
+  uniformly inside a bin is right and **no Jacobian or sin θ factor is applied
+  anywhere**.
+* **Energies are kinetic**, so they go straight into `SetKineticEnergy`.
+* **(θ, φ) is where the muon came from**, pointing up at the sky; the momentum
+  direction is the opposite.
+* **φ is in the detector frame**, which for this geometry is the world frame — the
+  flux calculation and the simulation use the same axes. If they ever diverge the
+  sky is rotated, and the azimuth structure varies by a factor 2.6.
+* Sampling uniformly in energy across a bin raises the mean energy by 0.3%; use more
+  energy bins if that matters.
+* 0.86% of the rate lies below the histogram's 1 GeV lower bound and is not in it.
+
+A missing file, or a file without `h_flux`, is **fatal**. It used to warn and fall
+back to 1 GeV muons straight down, which ran, filled an output file and answered a
+different question.
 
 ## Spectrum files
 
@@ -338,4 +390,5 @@ them.
 
 Errors are reported with a code and the offending token, e.g. `GEN614` for an
 unknown clause, `GEN623` for a missing `input`, `GEN625`/`GEN626` for a bad
-`hemisphere`.
+`sphere`, `GEN629` for `file` with `onvolume`, `GEN630` for `polarization` on a
+source that sets its own.

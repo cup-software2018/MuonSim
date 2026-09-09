@@ -106,7 +106,7 @@
 #
 # At least one /gen/vertex is REQUIRED -- there is no default generator, and
 # /run/beamOn without one is a fatal error (GEN001). This macro asks for cosmic
-# muons, which read the flux histogram h_dJdEdTdP from the named ROOT file; the
+# muons, which read the flux histogram h_flux from the named ROOT file; the
 # alternatives below are commented out. Adding a second /gen/vertex does not
 # replace the first, it fires alongside it.
 #
@@ -127,8 +127,12 @@
 #   a source             brings its own particles and energies, so it takes no
 #                        energy spec:
 #     cosmic             muons from a flux histogram. Derives its own position,
-#                        so it takes no position clause.
-#                        REQUIRES input <flux.root> holding the TH3D h_dJdEdTdP
+#                        so it takes no position clause. Launched from a sphere,
+#                        set with the 'sphere' clause, and it sets the run's
+#                        clock itself so a live time is reported.
+#                        REQUIRES input <flux.root>: the SPHERE file, holding the
+#                        TH3D h_flux. The PLANE file has cos(theta) folded in and
+#                        would be wrong by 32%, silently.
 #     rockgamma          gammas from the surrounding rock, entering through the
 #                        cavern boundary.  REQUIRES input <spectrum.yml>
 #     IBD                inverse beta decay -> correlated e+ and neutron.
@@ -139,6 +143,11 @@
 #     252CfSF            one spontaneous fission: ~3.8 neutrons, ~7 prompt
 #                        gammas, every event. Takes no input file -- it has
 #                        three built-in distributions, which one file cannot hold
+#     file               ready-made events from a text file, for the output of a
+#                        generator this code does not contain (DECAY0 and the
+#                        like). The file gives the particles, the position clause
+#                        says where, so one file serves any volume.
+#                        REQUIRES input <events.txt>. Format: doc/generator.md
 #
 #   Spectra are YAML tables (schema in src/gen/SpectrumFile.hh) for every source
 #   except cosmic: its flux is a 3D joint (energy, theta, phi) distribution, not a
@@ -185,10 +194,18 @@
 #                                     crossing it, and is rockgamma's default.
 #
 #   other:
-#     polarization <px> <py> <pz>
+#     polarization <px> <py> <pz>     a single named particle only; a source sets
+#                                     its own, and the clause is refused there
 #     time <t> [unit]                 vertex time, default ns
 #     input <file>                    data file for the sources above:
-#                                     .yml/.yaml table, or .root histogram
+#                                     .yml/.yaml table, .root histogram, or the
+#                                     event list 'file' reads
+#     sphere <x> <y> <z> <R> [unit]   cosmic only: the surface muons are launched
+#                                     from. R only has to enclose what is being
+#                                     asked about; the answer does not depend on
+#                                     it and the cost goes as R^2
+#     rotate                          file only: turn each event to a random
+#                                     orientation as it is used
 #
 #   The world is a SPHERE of radius 16 m centred on the origin, mostly rock. The
 #   air cavern is the upper half of a 15 m sphere standing on the cavern floor at

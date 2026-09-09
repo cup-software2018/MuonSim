@@ -35,7 +35,7 @@ PROD_VERSION="3.0"
 # Must match EXECUTABLE: install/lib64 (lib64, not lib) or PROJECT_ROOT/build.
 MUONSIM_LIBDIR="${PROJECT_ROOT}/install/lib64"
 
-NEVENT=10000
+NEVENT=50000
 
 # 0 = from the clock. A base makes the seed SEED_BASE + jobid, so array tasks differ
 # AND are reproducible; one fixed seed has them all simulate identical events.

@@ -45,7 +45,21 @@ PrimaryGeneratorAction::~PrimaryGeneratorAction() = default;
 
 void PrimaryGeneratorAction::AddVertex(std::unique_ptr<AbsVertexGen> vertex)
 {
-  if (vertex) fVertices.push_back(std::move(vertex));
+  if (!vertex) return;
+
+  // becquerel is 1/second, so a rate in Hz goes straight into the same clock a
+  // radioactive source drives, and counts / live time is then the answer -- with
+  // no effective area and no angular acceptance to work out, because a complete
+  // ensemble makes any subset of it "what happened in that time".
+  const G4double rate = vertex->GetRateHz();
+  if (rate > 0.) {
+    fActivity = rate;
+    G4cout << "/gen/vertex: " << vertex->GetKey() << " sets the clock itself, "
+           << rate / becquerel << " Hz -- " << 1. / (rate / becquerel)
+           << " s per generated primary. A later /gen/activity overrides it." << G4endl;
+  }
+
+  fVertices.push_back(std::move(vertex));
 }
 
 

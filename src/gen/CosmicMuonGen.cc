@@ -24,28 +24,40 @@ CosmicMuonGen::CosmicMuonGen(const std::string & fluxFile)
 
   auto * f = TFile::Open(fluxFile.c_str());
   if (f == nullptr || f->IsZombie()) {
-    G4Exception("CosmicMuonGen", "GEN630", JustWarning,
-                ("Cannot open muon flux file: " + fluxFile +
-                 " -- falling back to 1 GeV mu- straight down")
-                    .c_str());
     delete f;
+    G4Exception("CosmicMuonGen", "GEN631", FatalException,
+                ("Cannot open muon flux file: " + fluxFile).c_str());
     return;
   }
 
-  fHistFlux = static_cast<TH3D *>(f->Get("h_dJdEdTdP"));
+  fHistFlux = static_cast<TH3D *>(f->Get("h_flux"));
   if (fHistFlux == nullptr) {
-    G4Exception("CosmicMuonGen", "GEN631", JustWarning,
-                ("Missing histogram h_dJdEdTdP (TH3D: x=energy[GeV], y=theta[deg], "
-                 "z=phi[deg]) in " + fluxFile + " -- falling back to 1 GeV mu- straight down")
+    f->Close();
+    delete f;
+    // Fatal, where this used to warn and fall back to 1 GeV straight down. That
+    // fallback ran, filled an output file and answered a different question, which
+    // is worse than not starting.
+    G4Exception("CosmicMuonGen", "GEN631", FatalException,
+                ("No histogram h_flux (TH3D: x=energy[GeV], y=theta[deg], z=phi[deg]) in " +
+                 fluxFile + " -- this must be the SPHERE flux file")
                     .c_str());
+    return;
   }
-  else {
-    fHistFlux->SetDirectory(nullptr); // detach so it survives the file closing
-    BuildCDF();
-  }
+
+  fHistFlux->SetDirectory(nullptr); // detach so it survives the file closing
+  fFluxIntegral = fHistFlux->Integral();
+  BuildCDF();
 
   f->Close();
   delete f;
+
+  // Printed because nothing in the file says whether it is the sphere or the plane
+  // version, and the plane one is wrong here by 32%. Check this against the number
+  // the flux note quotes for the sphere file.
+  G4cout << "CosmicMuonGen: h_flux from " << fluxFile << ", integral " << fFluxIntegral
+         << " /cm2/s = " << fFluxIntegral * 1e4 * 86400. << " /m2/day" << G4endl;
+  G4cout << "CosmicMuonGen: this must be the SPHERE file -- the plane file has cos(theta)"
+         << " folded in and would be wrong by 32%" << G4endl;
 }
 
 CosmicMuonGen::~CosmicMuonGen() { delete fHistFlux; }
@@ -148,79 +160,56 @@ G4double CosmicMuonGen::GetWorldRadius() const
         world->GetLogicalVolume()->GetSolid()->BoundingLimits(pMin, pMax);
         fWorldRadius =
             std::max({pMax.x(), pMax.y(), pMax.z(), -pMin.x(), -pMin.y(), -pMin.z()});
-        // Foot-point plane: the world's widest horizontal cross-section, clamped
-        // into its z range. For a sphere or an upper hemisphere centred on the
-        // origin that is z = 0; for a world that does not straddle z = 0 it is the
-        // nearest face. Using the widest section is what makes the disk cover every
-        // vertical line through the world.
-        if (!fHasPlaneZ) {
-          fPlaneZ = std::min(std::max(0., pMin.z()), pMax.z());
-          fHasPlaneZ = true;
-        }
       }
     }
   }
   return fWorldRadius;
 }
 
+G4double CosmicMuonGen::GetRateHz() const
+{
+  if (fFluxIntegral <= 0.) return 0.;
+  // J is per cm2, so the projected area has to be in cm2 as well. pi R^2 and not
+  // 2 pi R^2: a sphere's shadow is a disc, whatever direction it is seen from.
+  const G4double radiusCm = GetSurfaceRadius() / cm;
+  return fFluxIntegral * pi * radiusCm * radiusCm / second;
+}
+
 void CosmicMuonGen::GenerateVertex(G4Event * event) const
 {
-  if (event == nullptr || fMuon == nullptr) return;
+  if (event == nullptr || fMuon == nullptr || fHistFlux == nullptr) return;
 
-  const G4double worldRadius = GetWorldRadius();
-  if (worldRadius <= 0.) return;
+  const G4double R = GetSurfaceRadius();
+  const G4ThreeVector & C = GetSurfaceCentre();
+  if (R <= 0.) return;
 
-  G4ThreeVector position;
-  G4ThreeVector direction;
-  G4double energy = 1. * GeV;
+  // Where it came from, and so where it is going.
+  G4double energy = 0., theta = 0., phi = 0.;
+  SampleFlux(energy, theta, phi);
 
-  if (fHistFlux == nullptr) { // no flux table: straight down from near the top
-    position = G4ThreeVector(0., 0., worldRadius * 0.9);
-    direction = G4ThreeVector(0., 0., -1.);
-  }
-  else {
-    const G4double surfaceRadius = GetSurfaceRadius();
-    const G4ThreeVector & centre = GetSurfaceCentre();
+  const G4double sinTheta = std::sin(theta), cosTheta = std::cos(theta);
+  const G4double sinPhi = std::sin(phi), cosPhi = std::cos(phi);
+  const G4ThreeVector direction(-sinTheta * cosPhi, -sinTheta * sinPhi, -cosTheta);
 
-    // A point on the hemisphere's FLAT BOTTOM, uniformly: whatever direction a
-    // muon arrives with, it lands uniformly over a horizontal plane, so that is
-    // where the aim point is drawn.
-    const G4double r = surfaceRadius * std::sqrt(G4UniformRand());
-    const G4double alpha = twopi * G4UniformRand();
-    const G4ThreeVector onFloor =
-        centre + G4ThreeVector(r * std::cos(alpha), r * std::sin(alpha), 0.);
+  // The shadow disc: radius R through C, perpendicular to the direction. Two axes
+  // spanning it, then a point uniform PER UNIT AREA on it -- the sqrt is what makes
+  // it uniform instead of piling up at the centre.
+  const G4ThreeVector e1 = direction.orthogonal().unit();
+  const G4ThreeVector e2 = direction.cross(e1).unit();
 
-    // The direction it arrives with.
-    G4double theta = 0., phi = 0.;
-    SampleFlux(energy, theta, phi);
+  const G4double rr = R * std::sqrt(G4UniformRand());
+  const G4double aa = twopi * G4UniformRand();
+  const G4ThreeVector aim = C + rr * (std::cos(aa) * e1 + std::sin(aa) * e2);
 
-    const G4double sinTheta = std::sin(theta);
-    const G4double cosTheta = std::cos(theta);
-    const G4double sinPhi = std::sin(phi);
-    const G4double cosPhi = std::cos(phi);
+  // Walk back up onto the sphere. |pos - C|^2 = rr^2 + (R^2 - rr^2) = R^2 exactly,
+  // and the point is always upstream of the aim, so nothing is ever rejected and
+  // there is no acceptance factor to carry.
+  G4ThreeVector position = aim - std::sqrt(std::max(0., R * R - rr * rr)) * direction;
 
-    direction = G4ThreeVector(-sinTheta * cosPhi, -sinTheta * sinPhi, -cosTheta);
-
-    // Back up that direction until the sphere: with w = onFloor - centre, which is
-    // horizontal and |w| = r, solving |w - t*dir|^2 = R^2 gives
-    //   t = (w.dir) + sqrt((w.dir)^2 + R^2 - r^2)
-    // and the positive root is the one upstream of the aim point. R^2 >= r^2 keeps
-    // it real, and t > 0 with a downward dir puts the start point above the floor,
-    // so it is always ON THE DOME -- nothing to reject.
-    const G4ThreeVector w = onFloor - centre;
-    const G4double wd = w.dot(direction);
-    const G4double t = wd + std::sqrt(std::max(0., wd * wd + surfaceRadius * surfaceRadius - r * r));
-    position = onFloor - t * direction;
-
-    fSurfaceTries++;
-    fSurfaceAccepted++;
-
-    // A step along the muon before the vertex is placed. It matters only when the
-    // surface grazes a geometry boundary -- which the fallback surface does, being
-    // the world's own extent: landing exactly on it makes Inside() report kSurface
-    // and the out-of-world guard reject the vertex.
-    position += 1. * mm * direction;
-  }
+  // A step inwards. It matters when the sphere grazes a geometry boundary -- which
+  // the fallback surface does, being the world's own extent: landing exactly on it
+  // makes Inside() report kSurface and the out-of-world guard refuses the vertex.
+  position += 1. * mm * direction;
 
   CheckInsideWorld(position, "CosmicMuon");
 

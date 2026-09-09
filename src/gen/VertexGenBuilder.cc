@@ -338,13 +338,13 @@ std::unique_ptr<AbsVertexGen> BuildVertexGen(const std::string & line)
   while (i < tokens.size()) {
     const std::string clause = ToLower(tokens[i++]);
 
-    if (clause == "hemisphere") {
-      // hemisphere <x> <y> <z> <R> [unit] -- the virtual surface cosmic muons
-      // start on. Centre and radius share one unit.
+    if (clause == "sphere") {
+      // sphere <x> <y> <z> <R> [unit] -- the virtual surface cosmic muons are
+      // launched from. Centre and radius share one unit.
       G4ThreeVector xyz;
-      if (!readVector("'hemisphere'", xyz)) return nullptr;
+      if (!readVector("'sphere'", xyz)) return nullptr;
       if (i >= tokens.size()) {
-        fail("GEN625", "'hemisphere' needs <x> <y> <z> <radius> [unit]");
+        fail("GEN625", "'sphere' needs <x> <y> <z> <radius> [unit]");
         return nullptr;
       }
       surfaceRadius = std::atof(tokens[i++].c_str());
@@ -352,7 +352,7 @@ std::unique_ptr<AbsVertexGen> BuildVertexGen(const std::string & line)
       surfaceCentre = xyz * lengthUnit;
       surfaceRadius *= lengthUnit;
       if (surfaceRadius <= 0.) {
-        fail("GEN626", "'hemisphere' radius must be positive");
+        fail("GEN626", "'sphere' radius must be positive");
         return nullptr;
       }
       haveSurface = true;
@@ -431,7 +431,7 @@ std::unique_ptr<AbsVertexGen> BuildVertexGen(const std::string & line)
     else {
       fail("GEN614", "unknown clause '" + tokens[i - 1] +
                          "' -- expected point | involume | onvolume | multivolume | random | "
-                         "direction | cos | iso | polarization | time | input");
+                         "direction | cos | iso | polarization | time | input | sphere | rotate");
       return nullptr;
     }
   }
@@ -481,12 +481,12 @@ std::unique_ptr<AbsVertexGen> BuildVertexGen(const std::string & line)
   if (isCosmic) {
     if (inputFile.empty()) {
       fail("GEN624", "'" + CosmicMuonGen::Key() +
-                         "' needs the flux ROOT file holding h_dJdEdTdP: input <flux.root>");
+                         "' needs the SPHERE flux ROOT file, holding h_flux: input <flux.root>");
       return nullptr;
     }
     auto gen = std::make_unique<CosmicMuonGen>(inputFile);
     if (!gen->HasFlux()) {
-      fail("GEN624", "no usable h_dJdEdTdP flux histogram in " + inputFile);
+      fail("GEN624", "no usable h_flux histogram in " + inputFile);
       return nullptr;
     }
     if (haveSurface) gen->SetSurface(surfaceCentre, surfaceRadius);
@@ -577,7 +577,7 @@ std::unique_ptr<AbsVertexGen> BuildVertexGen(const std::string & line)
   }
 
   if (haveSurface && !isCosmic) {
-    fail("GEN627", "'hemisphere' only applies to '" + CosmicMuonGen::Key() +
+    fail("GEN627", "'sphere' only applies to '" + CosmicMuonGen::Key() +
                        "', which is the only source that launches from a surface of its own");
     return nullptr;
   }

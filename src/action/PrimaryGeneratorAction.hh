@@ -29,6 +29,11 @@ public:
   void GeneratePrimaries(G4Event *) override;
 
   // Defined out of line: AbsVertexGen is only forward-declared here.
+  // Adopts the vertex's own rate for the clock, if it declares one. A cosmic
+  // source does: the flux table fixes how many muons a second cross its launch
+  // sphere, so asking the user for an activity would invite a number that
+  // disagrees with the histogram. Radioactive sources declare nothing and keep
+  // whatever /gen/activity says.
   void AddVertex(std::unique_ptr<AbsVertexGen> vertex);
   void ClearVertices();
   void ListVertices() const;

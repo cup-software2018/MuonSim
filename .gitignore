@@ -65,3 +65,8 @@ __pycache__/
 
 .agents
 .claude
+.clangd
+
+
+doc/*.pdf
+doc/*.tex

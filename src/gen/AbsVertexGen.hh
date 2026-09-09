@@ -54,6 +54,14 @@ public:
   // The vertex's time within the event. Zero for the decay that opens it; a later
   // offset for one that piles up on top, which is how two independent decays end up
   // in one event separated by their real gap.
+  // A source that knows its own absolute rate in Hz says so here, and the
+  // generator action drives the clock with it instead of /gen/activity. Zero means
+  // "I have no idea", which is true of every radioactive source: its rate is the
+  // sample's activity, which only the user knows. Cosmic muons are the opposite --
+  // the flux table fixes the rate, and asking the user for it would invite a
+  // number that disagrees with the histogram.
+  virtual G4double GetRateHz() const { return 0.; }
+
   void SetTime(G4double time) { fTime = time; }
   G4double GetTime() const { return fTime; }
 

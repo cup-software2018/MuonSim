@@ -11,23 +11,39 @@ class G4Event;
 class G4ParticleDefinition;
 class TH3D;
 
-// Cosmic muons entering the world from above.
+// Cosmic muons entering the world from above, launched from a SPHERE.
 //
-// Per event:
-//   1. sample (kinetic energy, zenith theta, azimuth phi) from the flux
-//      histogram h_dJdEdTdP in a ROOT file, by inverse CDF over all its bins
-//   2. pick a foot point uniformly on the horizontal disk at z = 0
-//   3. trace that muon direction backwards from the foot point to the world
-//      sphere -- that intersection is the start position
+// Per event, following doc/generator.md and the flux note's recipe:
+//   1. sample (kinetic energy, zenith theta, azimuth phi) from h_flux, by inverse
+//      CDF over all its bins
+//   2. draw a point uniformly on the sphere's SHADOW DISC -- the disc of radius R
+//      through the centre, perpendicular to the muon's direction
+//   3. walk back up the direction onto the sphere; that is the start point
 //
-// Step 2 is uniform on a HORIZONTAL disk because muon flux tables are given per
-// unit horizontal area (dJ/dE dtheta dphi), so weighting start points by
-// horizontal projected area is what reproduces that normalisation. This is also
-// why the position cannot come from an AbsPosGen: it is derived from the
-// direction sampled in step 1.
+// WHY A SPHERE AND NOT A HORIZONTAL DISC. The rate arriving from a direction is
+// I(Omega) * A_perp(Omega), and A_perp is the surface's projected area. For a
+// sphere that is pi R^2 from every direction -- a ball's shadow is the same circle
+// whatever the angle -- so no cos(theta) enters, and the sphere file is the one
+// whose bins already have no cos(theta) folded in.
 //
-// With no usable histogram it falls back to 1 GeV muons straight down, which
-// keeps geometry-only runs (e.g. visualisation) working.
+// A horizontal disc has A_perp = A cos(theta) instead, which is a different file,
+// and worse: it LEAKS. A muon drifts sideways as it descends, so it can hit the
+// apparatus and cross the disc plane outside the disc, never being generated at
+// all. Measured for the water tank, a disc at 9500 mm loses 12.9% of the muons
+// that hit it, preferentially at large zenith angle, so the inclination
+// distribution is skewed as well as the rate. A closed surface that ENCLOSES the
+// apparatus cannot leak: anything reaching inside came in through it. That is a
+// property of the shape, so the radius is then free -- and the answer must not
+// depend on it, which is a test worth running.
+//
+// The construction rejects nothing, so there is no acceptance factor: |pos - C| is
+// exactly R for every draw, and the start point is always upstream of the aim.
+//
+// THE FILE MUST BE THE SPHERE FILE. The plane file's bins carry cos(theta), and
+// using it here would be wrong by the ratio of the two integrals -- 32% -- with
+// nothing to notice it. Nothing in the file says which it is, so this class states
+// the requirement and prints the integral it found; check it against the number the
+// flux note quotes.
 class CosmicMuonGen : public AbsVertexGen {
 public:
   explicit CosmicMuonGen(const std::string & fluxFile);
@@ -40,28 +56,28 @@ public:
 
   bool HasFlux() const { return fHistFlux != nullptr; }
 
-  // Radius of the sphere muons start on, and the z of the horizontal plane their
-  // foot points are drawn on. Both are taken from the world solid's extent unless
-  // set, so they cannot drift out of step with the geometry.
-  // The virtual surface muons are launched from: a hemisphere of `radius`
-  // centred on `centre`, dome upwards.
+  // The launch sphere: centre and radius. Taken from the world solid's extent
+  // unless set, so it cannot drift out of step with the geometry.
   //
-  // How muons are placed: a point is drawn uniformly on the hemisphere's FLAT
-  // BOTTOM -- a muon lands uniformly over a horizontal plane whatever direction it
-  // came with -- the direction is drawn from the flux, and the start point is that
-  // aim point backed up along the direction until it meets the sphere. That is
-  // always on the dome, so every draw is used.
-  //
-  // The radius therefore has to enclose the apparatus and nothing more, the cost
-  // going as its square, and the flat side is the plane the muons are spread over.
+  // It only has to ENCLOSE whatever response is being asked about. It does not
+  // have to be tight, the answer does not depend on it, and the cost goes as its
+  // square -- a bigger sphere makes more muons and wastes more of them.
   void SetSurface(const G4ThreeVector & centre, G4double radius);
   const G4ThreeVector & GetSurfaceCentre() const;
   G4double GetSurfaceRadius() const;
 
-  // How many draws it took, for the record: the absolute rate needs the accepted
-  // fraction, since the effective area is that of the accepted set.
-  G4long GetSurfaceTries() const { return fSurfaceTries; }
-  G4long GetSurfaceAccepted() const { return fSurfaceAccepted; }
+  // The flux integral read from the histogram, in cm^-2 s^-1. This is the
+  // omnidirectional flux, and it is read rather than assumed.
+  G4double GetFluxIntegral() const { return fFluxIntegral; }
+
+  // Muons per second crossing the launch sphere: J * pi R^2, the sphere's
+  // projected area being the same from every direction.
+  //
+  // This is what makes a cosmic run have a live time. becquerel is 1/second, so
+  // the number goes straight into the same clock a radioactive source drives, and
+  // counts / live time is then the rate -- with no effective area and no angular
+  // acceptance to work out, because the generated ensemble is complete.
+  G4double GetRateHz() const override;
 
   void SetWorldRadius(G4double radius) { fWorldRadius = radius; }
   G4double GetWorldRadius() const;
@@ -76,13 +92,13 @@ protected:
 
 private:
 
-  mutable G4long fSurfaceTries = 0;
-  mutable G4long fSurfaceAccepted = 0;
 
   void BuildCDF();
 
   G4ParticleDefinition * fMuon = nullptr;
-  TH3D * fHistFlux = nullptr; // x: energy [GeV], y: theta [deg], z: phi [deg]
+  TH3D * fHistFlux = nullptr;
+  // x: energy [GeV], y: theta [deg], z: phi [deg]
+  G4double fFluxIntegral = 0.;   // cm^-2 s^-1, read from the histogram
 
   std::vector<G4double> fCDF; // normalised cumulative bin sums, size = nx*ny*nz + 1
   G4int fNBinsY = 0;
@@ -92,6 +108,4 @@ private:
   mutable G4ThreeVector fSurfaceCentre;
   mutable G4double fSurfaceRadius = 0.;
   mutable bool fHasSurface = false;
-  mutable G4double fPlaneZ = 0.;
-  mutable bool fHasPlaneZ = false;
 };

@@ -25,9 +25,11 @@ PrimaryGeneratorMessenger::PrimaryGeneratorMessenger(PrimaryGeneratorAction * ac
   fVertexCmd->SetGuidance("                                            leave the energy off so it");
   fVertexCmd->SetGuidance("                                            decays at rest");
   fVertexCmd->SetGuidance("  cosmic     muons from a flux histogram; derives its own position.");
-  fVertexCmd->SetGuidance("             REQUIRES input <flux.root> holding the TH3D h_dJdEdTdP --");
-  fVertexCmd->SetGuidance("             the one spectrum that is not YAML, being a 3D joint");
-  fVertexCmd->SetGuidance("             (energy, theta, phi) distribution rather than a table");
+  fVertexCmd->SetGuidance("             REQUIRES input <flux.root>: the SPHERE file, holding the");
+  fVertexCmd->SetGuidance("             TH3D h_flux. It is launched from a sphere, so the PLANE file");
+  fVertexCmd->SetGuidance("             would be wrong by 32% with nothing to notice. It sets the");
+  fVertexCmd->SetGuidance("             clock itself, so the run reports a live time");
+  fVertexCmd->SetGuidance("             (see 'sphere' below and doc/generator.md)");
   fVertexCmd->SetGuidance("  rockgamma  gammas from the rock, cos-weighted through the surface;");
   fVertexCmd->SetGuidance("             REQUIRES input <spectrum.yml>");
   fVertexCmd->SetGuidance("  IBD        inverse beta decay -> correlated e+ and neutron;");
@@ -54,6 +56,10 @@ PrimaryGeneratorMessenger::PrimaryGeneratorMessenger(PrimaryGeneratorAction * ac
   fVertexCmd->SetGuidance("                                  emission to that side of the normal");
   fVertexCmd->SetGuidance("  multivolume <pattern>           volumes matching it, by cubic volume");
   fVertexCmd->SetGuidance("  random                          isotropic direction (the default)");
+  fVertexCmd->SetGuidance("  sphere <x> <y> <z> <R> [unit]   'cosmic' only: the virtual surface muons");
+  fVertexCmd->SetGuidance("                                  are launched from. R only has to enclose");
+  fVertexCmd->SetGuidance("                                  what is being asked about; the answer does");
+  fVertexCmd->SetGuidance("                                  not depend on it and the cost goes as R^2");
   fVertexCmd->SetGuidance("  rotate                          'file' only: turn each event to a random");
   fVertexCmd->SetGuidance("                                  orientation as it is used, which is what");
   fVertexCmd->SetGuidance("                                  makes replaying a file bigger than itself");
