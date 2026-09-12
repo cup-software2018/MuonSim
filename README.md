@@ -165,8 +165,9 @@ Observers may add trees and objects of their own to the same file — see
 [observer.md](doc/observer.md).
 
 `libSimData` links only ROOT, not Geant4, and its rootmap autoloads, so an analysis
-needs nothing but the file. Worked examples are in `run/`: `generated_muon.C`,
-`compare.C`, `rock_gamma_position.C`, `rock_gamma_shape.C`.
+needs nothing but the file. Worked examples are in `run/`: `compare.py` and
+`wcmd.py` (PyROOT to read, numpy and matplotlib for the rest), and the ROOT macros
+`generated_muon.C`, `rock_gamma_position.C`, `rock_gamma_shape.C`.
 
 ### What gets saved
 

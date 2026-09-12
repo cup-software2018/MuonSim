@@ -301,8 +301,19 @@ void MultiVolumePosGen::EnsureBuilt()
         fVolumeNames.push_back(pv->GetName());
     }
     if (fVolumeNames.empty()) {
-      G4Exception("MultiVolumePosGen::EnsureBuilt", "GEN203", JustWarning,
-                  ("No physical volume name contains: " + fNamePattern).c_str());
+      // Fatal, where this used to warn. A pattern matching nothing left Generate()
+      // with no generators, and it returned a default PosDir -- every vertex at the
+      // world origin, which here is inside the rock. The run then completes, writes
+      // a file and reports no light, and the only trace is one JustWarning line
+      // thousands of lines up the log. The matching is a plain substring and it is
+      // CASE SENSITIVE, so 'water' instead of 'Water' is all it takes.
+      std::ostringstream msg;
+      msg << "no physical volume name contains '" << fNamePattern
+          << "'. The match is a case-sensitive substring of the PHYSICAL volume name"
+          << " -- 'Water' finds TankWater and DoorWater, 'water' finds nothing."
+          << " Run with /control/listAlias and check the name against the geometry.";
+      G4Exception("MultiVolumePosGen::EnsureBuilt", "GEN203", FatalException,
+                  msg.str().c_str());
     }
   }
 
@@ -346,6 +357,9 @@ void MultiVolumePosGen::EnsureBuilt()
 PosDir MultiVolumePosGen::Generate()
 {
   EnsureBuilt();
+  // Only reachable through the explicit-name-list constructors now: a pattern that
+  // matches nothing is fatal in EnsureBuilt, so it can no longer arrive here and
+  // put every vertex at the origin.
   if (fGenerators.empty()) return PosDir();
 
   const G4double r = G4UniformRand();
